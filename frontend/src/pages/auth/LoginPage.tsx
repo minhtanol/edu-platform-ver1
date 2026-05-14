@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/auth';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card } from '../../components/ui/card';
+import { BrandLogo, BrandName } from '../../components/BrandLogo';
 
 const schema = z.object({ email: z.string().email(), password: z.string().min(8) });
 type Form = z.infer<typeof schema>;
@@ -18,8 +19,8 @@ export function LoginPage() {
   return <main className="grid min-h-screen place-items-center p-4">
     <Card className="w-full max-w-md border-cyan-300/20 p-6">
       <div className="mb-6">
-        <span className="mb-4 grid h-12 w-12 place-items-center rounded-lg bg-primary text-lg font-bold text-slate-950 shadow-lg shadow-cyan-950/30">E</span>
-        <h1 className="text-2xl font-bold text-foreground">Nền tảng học tập</h1>
+        <BrandLogo className="mb-4 h-12 w-12" />
+        <h1 className="text-2xl font-bold text-foreground"><BrandName /></h1>
         <p className="mt-1 text-sm text-muted">Quản lý lớp học, đánh giá và tư liệu học tập trong một không gian bảo mật.</p>
       </div>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

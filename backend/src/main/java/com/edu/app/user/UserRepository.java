@@ -10,6 +10,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
   Optional<User> findByEmailAndDeletedAtIsNull(String email);
   Page<User> findByDeletedAtIsNull(Pageable pageable);
   Page<User> findByRoles_NameAndDeletedAtIsNull(RoleName role, Pageable pageable);
+  long countByRoles_NameAndDeletedAtIsNull(RoleName role);
   @Query("""
     select u from User u
     join StudentTeacherAssignment a on a.student = u

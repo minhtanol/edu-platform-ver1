@@ -29,7 +29,7 @@ public class SecurityConfig {
       .headers(h -> h.frameOptions(f -> f.sameOrigin()).contentSecurityPolicy(c -> c.policyDirectives("default-src 'self'")))
       .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
       .authorizeHttpRequests(a -> a
-        .requestMatchers("/api/v1/auth/**", "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator/health").permitAll()
+        .requestMatchers("/api/v1/auth/**", "/api/v1/branding", "/api/v1/branding/logo", "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator/health").permitAll()
         .requestMatchers(HttpMethod.GET, "/api/v1/media/stream/**").authenticated()
         .anyRequest().authenticated())
       .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)

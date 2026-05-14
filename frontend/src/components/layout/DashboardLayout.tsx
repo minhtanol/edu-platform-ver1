@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BarChart3, Bot, GalleryHorizontal, GraduationCap, Home, Images, LineChart, LogOut, Menu, Upload, Users, Video, X } from 'lucide-react';
+import { BarChart3, Bot, GalleryHorizontal, Home, Images, LineChart, LogOut, Menu, Settings, Upload, Users, Video, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore, Role } from '../../stores/auth';
 import { cn } from '../../lib/utils';
+import { BrandLogo, BrandName } from '../BrandLogo';
 
 const nav = {
-  ADMIN: [['/admin','Tổng quan',BarChart3], ['/admin/users','Tài khoản',Users], ['/admin/media','Media',Images], ['/admin/development','Lộ trình',LineChart], ['/admin/approvals','Duyệt tư liệu',Upload], ['/admin/reports','Báo cáo',BarChart3]],
+  ADMIN: [['/admin','Tổng quan',BarChart3], ['/admin/users','Tài khoản',Users], ['/admin/media','Media',Images], ['/admin/development','Lộ trình',LineChart], ['/admin/approvals','Duyệt tư liệu',Upload], ['/admin/settings','Cài đặt',Settings], ['/admin/reports','Báo cáo',BarChart3]],
   TEACHER: [['/teacher','Tổng quan',Home], ['/teacher/upload','Tải tư liệu',Upload], ['/teacher/evaluations','Đánh giá',BarChart3], ['/teacher/development','Theo dõi',LineChart], ['/teacher/students','Học sinh',Users]],
   STUDENT: [['/student','Trang chủ',Home], ['/student/videos','Video',Video], ['/student/gallery','Thư viện',GalleryHorizontal], ['/student/evaluations','Nhận xét',BarChart3], ['/student/chat','Trợ lý AI',Bot]]
 } as const;
@@ -27,8 +28,8 @@ export function DashboardLayout() {
     <aside className={cn('fixed inset-y-0 left-0 z-40 w-72 border-r border-cyan-400/10 bg-slate-950/86 p-4 text-foreground shadow-2xl backdrop-blur-2xl transition lg:static lg:w-auto lg:shadow-none', open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0')}>
       <div className="mb-7 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-slate-950 shadow-lg shadow-cyan-950/30"><GraduationCap size={22} /></span>
-          <div><strong className="block leading-tight">Nền tảng học tập</strong><span className="text-xs text-muted">{roleLabel[role]}</span></div>
+          <BrandLogo className="h-10 w-10" />
+          <div><strong className="block leading-tight"><BrandName /></strong><span className="text-xs text-muted">{roleLabel[role]}</span></div>
         </div>
         <button className="touch-target rounded-md p-2 text-muted hover:bg-white/10 lg:hidden" onClick={() => setOpen(false)}><X size={18} /></button>
       </div>

@@ -9,5 +9,6 @@ public interface MediaRepository extends JpaRepository<Media, UUID> {
   Page<Media> findByDeletedAtIsNull(Pageable pageable);
   Page<Media> findByOwnerIdAndDeletedAtIsNull(UUID ownerId, Pageable pageable);
   Page<Media> findByStatusAndDeletedAtIsNull(Media.Status status, Pageable pageable);
+  long countByStatusAndDeletedAtIsNull(Media.Status status);
   List<Media> findByTypeAndStatusAndApprovedAtBeforeAndDeletedAtIsNull(Media.MediaType type, Media.Status status, Instant approvedBefore);
 }

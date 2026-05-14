@@ -12,5 +12,11 @@ public interface UserMapper {
   @Mapping(target = "guardianPhone", expression = "java(null)")
   @Mapping(target = "hometown", expression = "java(null)")
   @Mapping(target = "allergies", expression = "java(null)")
+  @Mapping(target = "dateOfBirth", expression = "java(null)")
+  @Mapping(target = "age", expression = "java(null)")
+  @Mapping(target = "gender", expression = "java(null)")
+  @Mapping(target = "emergencyContactName", expression = "java(null)")
+  @Mapping(target = "emergencyContactPhone", expression = "java(null)")
+  @Mapping(target = "studyStatus", expression = "java(null)")
   UserDtos.UserResponse toResponse(User user);
 }

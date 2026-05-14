@@ -22,7 +22,9 @@ public class UserController {
   @PreAuthorize("hasRole('ADMIN')")
   @PostMapping public ApiResponse<UserDtos.UserResponse> create(@Valid @RequestBody UserDtos.CreateUserRequest req) { return ApiResponse.created(service.create(req)); }
   @PreAuthorize("hasRole('ADMIN')")
-  @PutMapping("/{id}") public ApiResponse<UserDtos.UserResponse> update(@PathVariable UUID id, @RequestBody UserDtos.UpdateUserRequest req) { return ApiResponse.ok(service.update(id, req)); }
+  @PutMapping("/{id}") public ApiResponse<UserDtos.UserResponse> update(Authentication auth, @PathVariable UUID id, @RequestBody UserDtos.UpdateUserRequest req) { return ApiResponse.ok(service.update(id, req, auth.getName())); }
+  @PreAuthorize("hasRole('ADMIN')")
+  @GetMapping("/{id}/profile-history") public ApiResponse<Page<UserDtos.StudentProfileHistoryResponse>> profileHistory(@PathVariable UUID id, @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) { return ApiResponse.ok(service.profileHistory(id, PageRequest.of(page, size))); }
   @PreAuthorize("hasRole('ADMIN')")
   @DeleteMapping("/{id}") public ApiResponse<Void> delete(@PathVariable UUID id) { service.delete(id); return ApiResponse.ok(null); }
 }
