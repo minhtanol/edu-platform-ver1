@@ -36,6 +36,12 @@ POSTGRES_PASSWORD=<mat-khau-db-manh>
 JWT_SECRET=<chuoi-bi-mat-it-nhat-48-ky-tu-ngau-nhien>
 ADMIN_INITIAL_PASSWORD=<mat-khau-admin-ban-dau>
 CORS_ORIGINS=http://<EC2_PUBLIC_IP>,https://<DOMAIN_NEU_CO>
+STORAGE_PROVIDER=r2
+CLOUDFLARE_R2_ACCOUNT_ID=<account-id>
+CLOUDFLARE_R2_ACCESS_KEY=<r2-access-key>
+CLOUDFLARE_R2_SECRET_KEY=<r2-secret-key>
+CLOUDFLARE_R2_BUCKET_NAME=<bucket-name>
+CLOUDFLARE_R2_PUBLIC_URL=https://<public-r2-domain>
 ```
 
 Truy cập:
@@ -54,6 +60,38 @@ docker compose pull
 docker compose up -d --build
 docker compose down
 ```
+
+## Lưu trữ video bằng Cloudflare R2
+
+Ứng dụng dùng R2 Object Storage qua API S3-compatible. File video/hình ảnh được upload vào bucket R2, database chỉ lưu object key dạng `r2://<bucket>/media/<user-id>/<uuid>-<filename>`. Frontend vẫn xem file qua endpoint backend `/api/v1/media/stream/{id}` nên bucket không cần public.
+
+Thiết lập trên Cloudflare:
+
+1. Tạo R2 bucket.
+2. Tạo R2 API Token có quyền đọc/ghi object cho bucket đó.
+3. Lấy Account ID. Backend sẽ tự tạo endpoint `https://<account-id>.r2.cloudflarestorage.com`.
+4. Điền các biến `CLOUDFLARE_R2_*` trong `.env`.
+
+Cấu hình tương ứng trong Spring Boot:
+
+```yaml
+cloudflare:
+  r2:
+    account-id: ${CLOUDFLARE_R2_ACCOUNT_ID}
+    access-key: ${CLOUDFLARE_R2_ACCESS_KEY}
+    secret-key: ${CLOUDFLARE_R2_SECRET_KEY}
+    bucket-name: ${CLOUDFLARE_R2_BUCKET_NAME}
+    public-url: ${CLOUDFLARE_R2_PUBLIC_URL}
+```
+
+Nếu muốn chạy local không dùng R2, đặt:
+
+```bash
+STORAGE_PROVIDER=local
+UPLOAD_DIR=/app/uploads
+```
+
+Khi `STORAGE_PROVIDER=local`, file được lưu trong Docker volume `uploads` tại `/app/uploads`.
 
 Backup database:
 
