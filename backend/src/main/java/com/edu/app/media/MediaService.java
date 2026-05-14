@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.*;
 import org.springframework.data.domain.*;
+import org.springframework.http.HttpRange;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,15 +20,13 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.*;
+import java.io.*;
 import java.net.URI;
 import java.nio.file.*;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 @Service @RequiredArgsConstructor
 public class MediaService {
@@ -37,10 +37,11 @@ public class MediaService {
   @Value("${cloudflare.r2.access-key:}") private String r2AccessKey;
   @Value("${cloudflare.r2.secret-key:}") private String r2SecretKey;
   @Value("${cloudflare.r2.bucket-name:}") private String r2BucketName;
-  @Value("${cloudflare.r2.public-url:}") private String r2PublicUrl;
   @Value("${cloudflare.r2.endpoint:}") private String r2Endpoint;
   @Value("${cloudflare.r2.region:auto}") private String r2Region;
   private S3Client s3;
+
+  public record StreamResult(Resource resource, String contentType, String filename, long contentLength, long totalLength, long start, long end, boolean partial) {}
 
   @Transactional public MediaDtos.MediaResponse upload(String uploaderEmail, UUID ownerId, String title, String description, Media.MediaType type, MultipartFile file) throws Exception {
     var uploader = users.findByEmailAndDeletedAtIsNull(uploaderEmail).orElseThrow(); var owner = users.findById(ownerId).orElseThrow();
@@ -55,22 +56,63 @@ public class MediaService {
     return media.findByOwnerIdAndDeletedAtIsNull(studentId, p).map(this::toDto);
   }
   public Page<MediaDtos.MediaResponse> pending(Pageable p) { return media.findByStatusAndDeletedAtIsNull(Media.Status.PENDING, p).map(this::toDto); }
-  @Transactional public MediaDtos.MediaResponse approve(UUID id, Media.Status status) { var m = media.findById(id).orElseThrow(); m.setStatus(status); return toDto(m); }
-  public Resource stream(String requesterEmail, UUID id) {
+  @Transactional public MediaDtos.MediaResponse approve(UUID id, Media.Status status) { var m = media.findById(id).orElseThrow(); m.setStatus(status); m.setApprovedAt(status == Media.Status.APPROVED ? Instant.now() : null); return toDto(m); }
+  public StreamResult stream(String requesterEmail, UUID id, List<HttpRange> ranges, boolean download) {
     var requester = users.findByEmailAndDeletedAtIsNull(requesterEmail).orElseThrow();
     var m = media.findById(id).orElseThrow();
     ensureCanAccessStudent(requester, m.getOwner().getId());
+    if (!hasRole(requester, RoleName.ADMIN) && m.getStatus() != Media.Status.APPROVED) throw new IllegalArgumentException("Tư liệu chưa được duyệt");
+    if (download && !hasRole(requester, RoleName.STUDENT)) throw new IllegalArgumentException("Chỉ tài khoản học sinh được tải tư liệu");
+    if (download && !requester.getId().equals(m.getOwner().getId())) throw new IllegalArgumentException("Bạn không có quyền tải tư liệu này");
+
+    var total = totalLength(m);
+    var start = 0L;
+    var end = Math.max(total - 1, 0);
+    var partial = !download && !ranges.isEmpty() && total > 0;
+    if (partial) {
+      var range = ranges.get(0);
+      start = range.getRangeStart(total);
+      end = range.getRangeEnd(total);
+      if (start > end || start >= total) {
+        start = 0;
+        end = total - 1;
+        partial = false;
+      }
+    }
+    var length = total == 0 ? 0 : end - start + 1;
+    return new StreamResult(resourceForRange(m, start, end, partial), contentType(m), downloadName(m), length, total, start, end, partial);
+  }
+  public Optional<Media> findActive(UUID id) { return media.findById(id).filter(m -> m.getDeletedAt() == null); }
+
+  @Transactional
+  @Scheduled(cron = "${app.media.cleanup-cron:0 30 2 * * *}", zone = "${app.media.cleanup-zone:Asia/Bangkok}")
+  public void deleteExpiredApprovedVideos() {
+    var expired = media.findByTypeAndStatusAndApprovedAtBeforeAndDeletedAtIsNull(Media.MediaType.VIDEO, Media.Status.APPROVED, Instant.now().minus(5, ChronoUnit.DAYS));
+    for (var item : expired) {
+      deleteStoredFile(item);
+      item.setDeletedAt(Instant.now());
+    }
+  }
+
+  private Resource resourceForRange(Media m, long start, long end, boolean partial) {
     if (isR2Path(m.getStoragePath())) {
       try {
-        ResponseInputStream<GetObjectResponse> object = r2Client().getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
+        var builder = GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath()));
+        if (partial) builder.range("bytes=" + start + "-" + end);
+        ResponseInputStream<GetObjectResponse> object = r2Client().getObject(builder.build());
         return new InputStreamResource(object);
       } catch (S3Exception ex) {
         throw new IllegalStateException("Không đọc được file từ R2. Kiểm tra bucket, quyền đọc object và cấu hình R2.", ex);
       }
     }
-    return new FileSystemResource(m.getStoragePath());
+    try {
+      var input = Files.newInputStream(Path.of(m.getStoragePath()));
+      if (start > 0) input.skipNBytes(start);
+      return new InputStreamResource(partial ? new LimitedInputStream(input, end - start + 1) : input);
+    } catch (IOException ex) {
+      throw new IllegalStateException("Không đọc được file lưu trữ.", ex);
+    }
   }
-  public Optional<Media> findActive(UUID id) { return media.findById(id).filter(m -> m.getDeletedAt() == null); }
   private String uploadToLocal(MultipartFile file) throws Exception {
     Files.createDirectories(Path.of(uploadDir));
     var path = Path.of(uploadDir, objectName(file));
@@ -79,11 +121,7 @@ public class MediaService {
   }
   private String uploadToR2(UUID ownerId, MultipartFile file) throws Exception {
     var key = "media/" + ownerId + "/" + objectName(file);
-    var builder = PutObjectRequest.builder()
-      .bucket(r2BucketName)
-      .key(key)
-      .contentLength(file.getSize())
-      .build();
+    var builder = PutObjectRequest.builder().bucket(r2BucketName).key(key).contentLength(file.getSize()).build();
     if (file.getContentType() != null) builder = builder.toBuilder().contentType(file.getContentType()).build();
     try (var input = file.getInputStream()) {
       r2Client().putObject(builder, RequestBody.fromInputStream(input, file.getSize()));
@@ -125,6 +163,54 @@ public class MediaService {
     }
     return s3;
   }
+  private long totalLength(Media m) {
+    if (m.getSizeBytes() > 0) return m.getSizeBytes();
+    if (isR2Path(m.getStoragePath())) return m.getSizeBytes();
+    try { return Files.size(Path.of(m.getStoragePath())); } catch (IOException ex) { throw new IllegalStateException("Không xác định được kích thước file.", ex); }
+  }
+  private String contentType(Media m) {
+    if (m.getContentType() != null && !m.getContentType().isBlank()) return m.getContentType();
+    var name = downloadName(m).toLowerCase(Locale.ROOT);
+    if (name.endsWith(".mp4") || m.getType() == Media.MediaType.VIDEO) return "video/mp4";
+    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+    if (name.endsWith(".png")) return "image/png";
+    return "application/octet-stream";
+  }
+  private String downloadName(Media m) {
+    var path = m.getStoragePath();
+    var name = isR2Path(path) ? r2Key(path) : Path.of(path).getFileName().toString();
+    var slash = name.lastIndexOf('/');
+    if (slash >= 0) name = name.substring(slash + 1);
+    var dash = name.indexOf('-');
+    return dash >= 0 && dash + 1 < name.length() ? name.substring(dash + 1) : name;
+  }
+  private void deleteStoredFile(Media m) {
+    try {
+      if (isR2Path(m.getStoragePath())) {
+        r2Client().deleteObject(DeleteObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
+      } else {
+        Files.deleteIfExists(Path.of(m.getStoragePath()));
+      }
+    } catch (Exception ex) {
+      throw new IllegalStateException("Không xóa được video hết hạn.", ex);
+    }
+  }
+  private static class LimitedInputStream extends FilterInputStream {
+    private long remaining;
+    LimitedInputStream(InputStream in, long limit) { super(in); this.remaining = limit; }
+    @Override public int read() throws IOException {
+      if (remaining <= 0) return -1;
+      var value = super.read();
+      if (value != -1) remaining--;
+      return value;
+    }
+    @Override public int read(byte[] b, int off, int len) throws IOException {
+      if (remaining <= 0) return -1;
+      var count = super.read(b, off, (int) Math.min(len, remaining));
+      if (count > 0) remaining -= count;
+      return count;
+    }
+  }
   private boolean hasRole(User user, RoleName role) { return user.getRoles().stream().anyMatch(r -> r.getName() == role); }
   private void ensureCanAccessStudent(User requester, UUID studentId) {
     if (hasRole(requester, RoleName.ADMIN)) return;
@@ -144,7 +230,8 @@ public class MediaService {
       m.getType(),
       m.getStatus(),
       m.getContentType(),
-      m.getSizeBytes()
+      m.getSizeBytes(),
+      m.getApprovedAt()
     );
   }
 }

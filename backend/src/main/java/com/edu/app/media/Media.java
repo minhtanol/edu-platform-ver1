@@ -5,6 +5,7 @@ import com.edu.app.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity @Table(name="media")
@@ -21,4 +22,5 @@ public class Media extends BaseEntity {
   @Column(nullable=false, length = 1000) private String storagePath;
   @Column(length = 120) private String contentType;
   private long sizeBytes;
+  private Instant approvedAt;
 }

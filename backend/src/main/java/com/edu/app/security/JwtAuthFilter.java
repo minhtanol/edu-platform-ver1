@@ -16,9 +16,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   private final JwtService jwt; private final UserRepository users;
   @Override protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain) throws ServletException, IOException {
     var header = req.getHeader("Authorization");
-    if (header != null && header.startsWith("Bearer ")) {
+    var bearer = header != null && header.startsWith("Bearer ") ? header.substring(7) : req.getParameter("access_token");
+    if (bearer != null && !bearer.isBlank()) {
       try {
-        var email = jwt.subject(header.substring(7));
+        var email = jwt.subject(bearer);
         users.findByEmailAndDeletedAtIsNull(email).ifPresent(u -> {
           var auths = u.getRoles().stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r.getName())).toList();
           SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(u.getEmail(), null, auths));

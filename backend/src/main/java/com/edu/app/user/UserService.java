@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class UserService {
-  private final UserRepository users; private final RoleRepository roles; private final PasswordEncoder encoder; private final StudentTeacherAssignmentRepository assignments;
+  private final UserRepository users; private final RoleRepository roles; private final PasswordEncoder encoder; private final StudentTeacherAssignmentRepository assignments; private final StudentProfileRepository profiles;
   public Page<UserDtos.UserResponse> list(Pageable pageable) { return users.findByDeletedAtIsNull(pageable).map(this::toResponse); }
   public Page<UserDtos.UserResponse> teachers(Pageable pageable) { return users.findByRoles_NameAndDeletedAtIsNull(RoleName.TEACHER, pageable).map(this::toResponse); }
   public Page<UserDtos.UserResponse> students(String requesterEmail, Pageable pageable) {
@@ -28,12 +28,13 @@ public class UserService {
     var u = new User(); u.setEmail(req.email()); u.setFullName(req.fullName()); u.setPasswordHash(encoder.encode(req.password())); u.setRoles(resolvedRoles);
     var saved = users.save(u);
     syncTeacherAssignment(saved, resolvedRoles, req.teacherId());
+    syncStudentProfile(saved, resolvedRoles, req.address(), req.guardianName(), req.guardianPhone(), req.hometown(), req.allergies());
     return toResponse(saved);
   }
   @Transactional public UserDtos.UserResponse update(UUID id, UserDtos.UpdateUserRequest req) {
-    var u = users.findById(id).orElseThrow(); if (req.fullName()!=null) u.setFullName(req.fullName()); if (req.enabled()!=null) u.setEnabled(req.enabled()); if (req.roles()!=null) u.setRoles(resolve(req.roles())); if (req.roles()!=null || req.teacherId()!=null) syncTeacherAssignment(u, u.getRoles(), req.teacherId()); return toResponse(u);
+    var u = users.findById(id).orElseThrow(); if (req.fullName()!=null) u.setFullName(req.fullName()); if (req.enabled()!=null) u.setEnabled(req.enabled()); if (req.roles()!=null) u.setRoles(resolve(req.roles())); if (req.roles()!=null || req.teacherId()!=null) syncTeacherAssignment(u, u.getRoles(), req.teacherId()); syncStudentProfile(u, u.getRoles(), req.address(), req.guardianName(), req.guardianPhone(), req.hometown(), req.allergies()); return toResponse(u);
   }
-  @Transactional public void delete(UUID id) { assignments.deleteByStudentId(id); var u = users.findById(id).orElseThrow(); u.setDeletedAt(Instant.now()); }
+  @Transactional public void delete(UUID id) { assignments.deleteByStudentId(id); profiles.deleteByUserId(id); var u = users.findById(id).orElseThrow(); u.setDeletedAt(Instant.now()); }
   private Set<Role> resolve(Set<RoleName> names) { return Optional.ofNullable(names).orElse(Set.of(RoleName.STUDENT)).stream().map(n -> roles.findByName(n).orElseThrow()).collect(Collectors.toSet()); }
   private boolean hasRole(User user, RoleName role) { return user.getRoles().stream().anyMatch(r -> r.getName() == role); }
   private void syncTeacherAssignment(User student, Set<Role> userRoles, UUID teacherId) {
@@ -51,8 +52,25 @@ public class UserService {
     assignment.setTeacher(teacher);
     assignments.save(assignment);
   }
+  private void syncStudentProfile(User user, Set<Role> userRoles, String address, String guardianName, String guardianPhone, String hometown, String allergies) {
+    var isStudent = userRoles.stream().anyMatch(r -> r.getName() == RoleName.STUDENT);
+    if (!isStudent) {
+      profiles.deleteByUserId(user.getId());
+      return;
+    }
+    var profile = profiles.findByUserIdAndDeletedAtIsNull(user.getId()).orElseGet(() -> {
+      var p = new StudentProfile(); p.setUser(user); return p;
+    });
+    if (address != null) profile.setAddress(address);
+    if (guardianName != null) profile.setGuardianName(guardianName);
+    if (guardianPhone != null) profile.setGuardianPhone(guardianPhone);
+    if (hometown != null) profile.setHometown(hometown);
+    if (allergies != null) profile.setAllergies(allergies);
+    profiles.save(profile);
+  }
   private UserDtos.UserResponse toResponse(User user) {
     var teacher = assignments.findByStudentIdAndDeletedAtIsNull(user.getId()).map(StudentTeacherAssignment::getTeacher).orElse(null);
+    var profile = profiles.findByUserIdAndDeletedAtIsNull(user.getId()).orElse(null);
     return new UserDtos.UserResponse(
       user.getId(),
       user.getEmail(),
@@ -60,7 +78,12 @@ public class UserService {
       user.isEnabled(),
       user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()),
       teacher == null ? null : teacher.getId(),
-      teacher == null ? null : teacher.getFullName()
+      teacher == null ? null : teacher.getFullName(),
+      profile == null ? null : profile.getAddress(),
+      profile == null ? null : profile.getGuardianName(),
+      profile == null ? null : profile.getGuardianPhone(),
+      profile == null ? null : profile.getHometown(),
+      profile == null ? null : profile.getAllergies()
     );
   }
 }

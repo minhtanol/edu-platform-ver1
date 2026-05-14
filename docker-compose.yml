@@ -36,6 +36,8 @@ services:
       CLOUDFLARE_R2_PUBLIC_URL: ${CLOUDFLARE_R2_PUBLIC_URL:-}
       CLOUDFLARE_R2_ENDPOINT: ${CLOUDFLARE_R2_ENDPOINT:-}
       CLOUDFLARE_R2_REGION: ${CLOUDFLARE_R2_REGION:-auto}
+      MEDIA_CLEANUP_CRON: ${MEDIA_CLEANUP_CRON:-0 30 2 * * *}
+      MEDIA_CLEANUP_ZONE: ${MEDIA_CLEANUP_ZONE:-Asia/Bangkok}
     depends_on:
       postgres:
         condition: service_healthy

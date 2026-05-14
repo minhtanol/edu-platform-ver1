@@ -26,6 +26,9 @@ app:
   upload-dir: ${UPLOAD_DIR:uploads}
   storage:
     provider: ${STORAGE_PROVIDER:local}
+  media:
+    cleanup-cron: ${MEDIA_CLEANUP_CRON:0 30 2 * * *}
+    cleanup-zone: ${MEDIA_CLEANUP_ZONE:Asia/Bangkok}
   deepseek:
     api-key: ${DEEPSEEK_API_KEY:}
     base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}

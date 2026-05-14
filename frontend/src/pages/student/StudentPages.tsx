@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Send } from 'lucide-react';
+import { Download, Send } from 'lucide-react';
 import { api } from '../../services/api';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -14,6 +14,12 @@ function useStudentId() {
   const id = useAuthStore(s => s.id);
   const me = useQuery({ queryKey: ['me'], enabled: !id, queryFn: async () => (await api.get('/users/me')).data.data as { id: string } });
   return id ?? me.data?.id ?? '';
+}
+
+function mediaUrl(path: string) {
+  const base = String(api.defaults.baseURL ?? '/api/v1').replace(/\/$/, '');
+  const token = useAuthStore.getState().accessToken;
+  return `${base}${path}?access_token=${encodeURIComponent(token ?? '')}`;
 }
 
 export function StudentHomePage() {
@@ -37,26 +43,17 @@ export function GalleryPage() {
 }
 
 function MediaPreview({ item }: { item: Media }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    let objectUrl = '';
-    api.get(`/media/stream/${item.id}`, { responseType: 'blob' }).then(res => {
-      objectUrl = URL.createObjectURL(res.data);
-      setSrc(objectUrl);
-    });
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [item.id]);
-  if (!src) return <div className="skeleton aspect-video rounded-md" />;
+  const stream = mediaUrl(`/media/stream/${item.id}`);
   return item.type === 'VIDEO'
-    ? <video className="aspect-video w-full rounded-md bg-slate-950 object-cover" src={src} controls />
-    : <img className="aspect-video w-full rounded-md bg-slate-950 object-cover" src={src} alt={item.title} />;
+    ? <video className="aspect-video w-full rounded-md bg-slate-950 object-cover" src={stream} preload="metadata" controls playsInline />
+    : <img className="aspect-video w-full rounded-md bg-slate-950 object-cover" src={stream} loading="lazy" alt={item.title} />;
 }
 
 function MediaList({ title, items = [], loading }: { title: string; items?: Media[]; loading?: boolean }) {
   return <div><h2 className="mb-4 text-xl font-semibold">{title}</h2><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {loading && [0,1,2].map(i => <div key={i} className="skeleton h-40 rounded-lg" />)}
     {!loading && items.length === 0 && <Card>Chưa có tư liệu nào được duyệt.</Card>}
-    {items.map(m => <Card key={m.id}><MediaPreview item={m} /><b className="mt-3 block">{m.title}</b>{m.description && <p className="text-sm text-muted">{m.description}</p>}</Card>)}
+    {items.map(m => <Card key={m.id}><MediaPreview item={m} /><div className="mt-3 flex items-start justify-between gap-3"><div><b className="block">{m.title}</b>{m.description && <p className="text-sm text-muted">{m.description}</p>}</div><a className="touch-target rounded-md p-2 text-muted hover:bg-white/10 hover:text-foreground" title="Tải xuống" href={mediaUrl(`/media/download/${m.id}`)}><Download size={18} /></a></div></Card>)}
   </div></div>;
 }
 
