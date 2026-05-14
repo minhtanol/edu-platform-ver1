@@ -1,0 +1,36 @@
+server:
+  port: ${SERVER_PORT:8080}
+spring:
+  application.name: education-platform
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/education}
+    username: ${SPRING_DATASOURCE_USERNAME:education}
+    password: ${SPRING_DATASOURCE_PASSWORD:education}
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data.redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+  servlet.multipart:
+    max-file-size: 512MB
+    max-request-size: 512MB
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-this-secret-change-this-secret-change-this-secret}
+    access-minutes: ${JWT_ACCESS_MINUTES:30}
+    refresh-days: ${JWT_REFRESH_DAYS:14}
+  cors-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  upload-dir: ${UPLOAD_DIR:uploads}
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:}
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+  seed:
+    admin-password: ${ADMIN_INITIAL_PASSWORD:Admin@123}
+logging:
+  level:
+    com.edu.app: INFO
+springdoc:
+  swagger-ui.path: /swagger-ui.html
