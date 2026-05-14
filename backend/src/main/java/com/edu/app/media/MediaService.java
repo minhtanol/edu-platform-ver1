@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.net.URI;
 import java.nio.file.*;
 import java.util.Locale;
@@ -49,8 +50,12 @@ public class MediaService {
   public Resource stream(UUID id) {
     var m = media.findById(id).orElseThrow();
     if (isR2Path(m.getStoragePath())) {
-      ResponseInputStream<GetObjectResponse> object = r2Client().getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
-      return new InputStreamResource(object);
+      try {
+        ResponseInputStream<GetObjectResponse> object = r2Client().getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
+        return new InputStreamResource(object);
+      } catch (S3Exception ex) {
+        throw new IllegalStateException("Không đọc được file từ R2. Kiểm tra bucket, quyền đọc object và cấu hình R2.", ex);
+      }
     }
     return new FileSystemResource(m.getStoragePath());
   }
@@ -71,6 +76,8 @@ public class MediaService {
     if (file.getContentType() != null) builder = builder.toBuilder().contentType(file.getContentType()).build();
     try (var input = file.getInputStream()) {
       r2Client().putObject(builder, RequestBody.fromInputStream(input, file.getSize()));
+    } catch (S3Exception ex) {
+      throw new IllegalStateException("Không upload được file lên R2. Kiểm tra bucket, access key/secret key và quyền ghi object.", ex);
     }
     return "r2://" + r2BucketName + "/" + key;
   }
