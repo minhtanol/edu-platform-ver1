@@ -2,7 +2,6 @@ package com.edu.app.media;
 
 import com.edu.app.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.*;
 import org.springframework.data.domain.*;
@@ -26,7 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service @RequiredArgsConstructor
-public class MediaService implements InitializingBean {
+public class MediaService {
   private final MediaRepository media; private final UserRepository users;
   @Value("${app.upload-dir}") private String uploadDir;
   @Value("${app.storage.provider:local}") private String storageProvider;
@@ -39,19 +38,6 @@ public class MediaService implements InitializingBean {
   @Value("${cloudflare.r2.region:auto}") private String r2Region;
   private S3Client s3;
 
-  @Override public void afterPropertiesSet() {
-    if (!isR2()) return;
-    if (r2AccountId.isBlank() || r2BucketName.isBlank() || r2AccessKey.isBlank() || r2SecretKey.isBlank()) {
-      throw new IllegalStateException("R2 storage is enabled but account id, bucket or credentials are missing");
-    }
-    s3 = S3Client.builder()
-      .endpointOverride(URI.create(r2Endpoint()))
-      .region(Region.of(r2Region))
-      .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(r2AccessKey, r2SecretKey)))
-      .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-      .build();
-  }
-
   @Transactional public MediaDtos.MediaResponse upload(String uploaderEmail, UUID ownerId, String title, String description, Media.MediaType type, MultipartFile file) throws Exception {
     var uploader = users.findByEmailAndDeletedAtIsNull(uploaderEmail).orElseThrow(); var owner = users.findById(ownerId).orElseThrow();
     var storagePath = isR2() ? uploadToR2(ownerId, file) : uploadToLocal(file);
@@ -63,7 +49,7 @@ public class MediaService implements InitializingBean {
   public Resource stream(UUID id) {
     var m = media.findById(id).orElseThrow();
     if (isR2Path(m.getStoragePath())) {
-      ResponseInputStream<GetObjectResponse> object = s3.getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
+      ResponseInputStream<GetObjectResponse> object = r2Client().getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
       return new InputStreamResource(object);
     }
     return new FileSystemResource(m.getStoragePath());
@@ -84,7 +70,7 @@ public class MediaService implements InitializingBean {
       .build();
     if (file.getContentType() != null) builder = builder.toBuilder().contentType(file.getContentType()).build();
     try (var input = file.getInputStream()) {
-      s3.putObject(builder, RequestBody.fromInputStream(input, file.getSize()));
+      r2Client().putObject(builder, RequestBody.fromInputStream(input, file.getSize()));
     }
     return "r2://" + r2BucketName + "/" + key;
   }
@@ -103,6 +89,20 @@ public class MediaService implements InitializingBean {
   private String r2Endpoint() {
     if (!r2Endpoint.isBlank()) return r2Endpoint;
     return "https://" + r2AccountId + ".r2.cloudflarestorage.com";
+  }
+  private S3Client r2Client() {
+    if (r2AccountId.isBlank() || r2BucketName.isBlank() || r2AccessKey.isBlank() || r2SecretKey.isBlank()) {
+      throw new IllegalStateException("R2 storage is enabled but account id, bucket or credentials are missing");
+    }
+    if (s3 == null) {
+      s3 = S3Client.builder()
+        .endpointOverride(URI.create(r2Endpoint()))
+        .region(Region.of(r2Region))
+        .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(r2AccessKey, r2SecretKey)))
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .build();
+    }
+    return s3;
   }
   private MediaDtos.MediaResponse toDto(Media m) { return new MediaDtos.MediaResponse(m.getId(), m.getOwner().getId(), m.getTitle(), m.getDescription(), m.getType(), m.getStatus(), m.getContentType(), m.getSizeBytes()); }
 }

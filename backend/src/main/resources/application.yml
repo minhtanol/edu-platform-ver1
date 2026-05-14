@@ -45,3 +45,12 @@ logging:
     com.edu.app: INFO
 springdoc:
   swagger-ui.path: /swagger-ui.html
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
