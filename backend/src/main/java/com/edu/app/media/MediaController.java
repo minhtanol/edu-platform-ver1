@@ -18,10 +18,12 @@ public class MediaController {
   public ApiResponse<MediaDtos.MediaResponse> upload(Authentication auth, @RequestParam UUID ownerId, @RequestParam String title, @RequestParam(required=false) String description, @RequestParam Media.MediaType type, @RequestPart MultipartFile file) throws Exception {
     return ApiResponse.created(service.upload(auth.getName(), ownerId, title, description, type, file));
   }
-  @GetMapping("/student/{studentId}") public ApiResponse<Page<MediaDtos.MediaResponse>> byStudent(@PathVariable UUID studentId, @RequestParam(defaultValue="0") int page) { return ApiResponse.ok(service.byStudent(studentId, PageRequest.of(page, 20))); }
-  @GetMapping("/stream/{id}") public ResponseEntity<Resource> stream(@PathVariable UUID id) {
+  @GetMapping @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<Page<MediaDtos.MediaResponse>> list(@RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="100") int size) { return ApiResponse.ok(service.list(PageRequest.of(page, size))); }
+  @GetMapping("/student/{studentId}") public ApiResponse<Page<MediaDtos.MediaResponse>> byStudent(Authentication auth, @PathVariable UUID studentId, @RequestParam(defaultValue="0") int page) { return ApiResponse.ok(service.byStudent(auth.getName(), studentId, PageRequest.of(page, 20))); }
+  @GetMapping("/stream/{id}") public ResponseEntity<Resource> stream(Authentication auth, @PathVariable UUID id) {
     var media = service.findActive(id).orElseThrow();
     var contentType = media.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(media.getContentType());
-    return ResponseEntity.ok().contentType(contentType).body(service.stream(id));
+    return ResponseEntity.ok().contentType(contentType).body(service.stream(auth.getName(), id));
   }
 }

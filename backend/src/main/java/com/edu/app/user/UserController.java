@@ -14,7 +14,9 @@ public class UserController {
   private final UserService service;
   @GetMapping("/me") public ApiResponse<UserDtos.UserResponse> me(Authentication auth) { return ApiResponse.ok(service.me(auth.getName())); }
   @GetMapping("/students") @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
-  public ApiResponse<Page<UserDtos.UserResponse>> students(@RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="100") int size) { return ApiResponse.ok(service.students(PageRequest.of(page, size))); }
+  public ApiResponse<Page<UserDtos.UserResponse>> students(Authentication auth, @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="100") int size) { return ApiResponse.ok(service.students(auth.getName(), PageRequest.of(page, size))); }
+  @GetMapping("/teachers") @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<Page<UserDtos.UserResponse>> teachers(@RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="100") int size) { return ApiResponse.ok(service.teachers(PageRequest.of(page, size))); }
   @PreAuthorize("hasRole('ADMIN')")
   @GetMapping public ApiResponse<Page<UserDtos.UserResponse>> list(@RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) { return ApiResponse.ok(service.list(PageRequest.of(page, size))); }
   @PreAuthorize("hasRole('ADMIN')")

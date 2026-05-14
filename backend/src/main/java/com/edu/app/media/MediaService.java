@@ -1,5 +1,8 @@
 package com.edu.app.media;
 
+import com.edu.app.user.RoleName;
+import com.edu.app.user.StudentTeacherAssignmentRepository;
+import com.edu.app.user.User;
 import com.edu.app.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +30,7 @@ import java.util.UUID;
 
 @Service @RequiredArgsConstructor
 public class MediaService {
-  private final MediaRepository media; private final UserRepository users;
+  private final MediaRepository media; private final UserRepository users; private final StudentTeacherAssignmentRepository assignments;
   @Value("${app.upload-dir}") private String uploadDir;
   @Value("${app.storage.provider:local}") private String storageProvider;
   @Value("${cloudflare.r2.account-id:}") private String r2AccountId;
@@ -41,14 +44,22 @@ public class MediaService {
 
   @Transactional public MediaDtos.MediaResponse upload(String uploaderEmail, UUID ownerId, String title, String description, Media.MediaType type, MultipartFile file) throws Exception {
     var uploader = users.findByEmailAndDeletedAtIsNull(uploaderEmail).orElseThrow(); var owner = users.findById(ownerId).orElseThrow();
+    ensureCanAccessStudent(uploader, ownerId);
     var storagePath = isR2() ? uploadToR2(ownerId, file) : uploadToLocal(file);
     var m = new Media(); m.setUploadedBy(uploader); m.setOwner(owner); m.setTitle(title); m.setDescription(description); m.setType(type); m.setStoragePath(storagePath); m.setContentType(file.getContentType()); m.setSizeBytes(file.getSize()); return toDto(media.save(m));
   }
-  public Page<MediaDtos.MediaResponse> byStudent(UUID studentId, Pageable p) { return media.findByOwnerIdAndDeletedAtIsNull(studentId, p).map(this::toDto); }
+  public Page<MediaDtos.MediaResponse> list(Pageable p) { return media.findByDeletedAtIsNull(p).map(this::toDto); }
+  public Page<MediaDtos.MediaResponse> byStudent(String requesterEmail, UUID studentId, Pageable p) {
+    var requester = users.findByEmailAndDeletedAtIsNull(requesterEmail).orElseThrow();
+    ensureCanAccessStudent(requester, studentId);
+    return media.findByOwnerIdAndDeletedAtIsNull(studentId, p).map(this::toDto);
+  }
   public Page<MediaDtos.MediaResponse> pending(Pageable p) { return media.findByStatusAndDeletedAtIsNull(Media.Status.PENDING, p).map(this::toDto); }
   @Transactional public MediaDtos.MediaResponse approve(UUID id, Media.Status status) { var m = media.findById(id).orElseThrow(); m.setStatus(status); return toDto(m); }
-  public Resource stream(UUID id) {
+  public Resource stream(String requesterEmail, UUID id) {
+    var requester = users.findByEmailAndDeletedAtIsNull(requesterEmail).orElseThrow();
     var m = media.findById(id).orElseThrow();
+    ensureCanAccessStudent(requester, m.getOwner().getId());
     if (isR2Path(m.getStoragePath())) {
       try {
         ResponseInputStream<GetObjectResponse> object = r2Client().getObject(GetObjectRequest.builder().bucket(r2BucketName).key(r2Key(m.getStoragePath())).build());
@@ -114,5 +125,26 @@ public class MediaService {
     }
     return s3;
   }
-  private MediaDtos.MediaResponse toDto(Media m) { return new MediaDtos.MediaResponse(m.getId(), m.getOwner().getId(), m.getTitle(), m.getDescription(), m.getType(), m.getStatus(), m.getContentType(), m.getSizeBytes()); }
+  private boolean hasRole(User user, RoleName role) { return user.getRoles().stream().anyMatch(r -> r.getName() == role); }
+  private void ensureCanAccessStudent(User requester, UUID studentId) {
+    if (hasRole(requester, RoleName.ADMIN)) return;
+    if (hasRole(requester, RoleName.STUDENT) && requester.getId().equals(studentId)) return;
+    if (hasRole(requester, RoleName.TEACHER) && assignments.existsByStudentIdAndTeacherIdAndDeletedAtIsNull(studentId, requester.getId())) return;
+    throw new IllegalArgumentException("Bạn không có quyền thao tác với học sinh này");
+  }
+  private MediaDtos.MediaResponse toDto(Media m) {
+    return new MediaDtos.MediaResponse(
+      m.getId(),
+      m.getOwner().getId(),
+      m.getOwner().getFullName(),
+      m.getUploadedBy().getId(),
+      m.getUploadedBy().getFullName(),
+      m.getTitle(),
+      m.getDescription(),
+      m.getType(),
+      m.getStatus(),
+      m.getContentType(),
+      m.getSizeBytes()
+    );
+  }
 }

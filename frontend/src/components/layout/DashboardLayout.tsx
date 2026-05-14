@@ -1,11 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BarChart3, Bot, GalleryHorizontal, GraduationCap, Home, LogOut, Menu, Upload, Users, Video, X } from 'lucide-react';
+import { BarChart3, Bot, GalleryHorizontal, GraduationCap, Home, Images, LogOut, Menu, Upload, Users, Video, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore, Role } from '../../stores/auth';
 import { cn } from '../../lib/utils';
 
 const nav = {
-  ADMIN: [['/admin','Tổng quan',BarChart3], ['/admin/users','Tài khoản',Users], ['/admin/approvals','Duyệt tư liệu',Upload], ['/admin/reports','Báo cáo',BarChart3]],
+  ADMIN: [['/admin','Tổng quan',BarChart3], ['/admin/users','Tài khoản',Users], ['/admin/media','Media',Images], ['/admin/approvals','Duyệt tư liệu',Upload], ['/admin/reports','Báo cáo',BarChart3]],
   TEACHER: [['/teacher','Tổng quan',Home], ['/teacher/upload','Tải tư liệu',Upload], ['/teacher/evaluations','Đánh giá',BarChart3], ['/teacher/students','Học sinh',Users]],
   STUDENT: [['/student','Trang chủ',Home], ['/student/videos','Video',Video], ['/student/gallery','Thư viện',GalleryHorizontal], ['/student/evaluations','Nhận xét',BarChart3], ['/student/chat','Trợ lý AI',Bot]]
 } as const;
