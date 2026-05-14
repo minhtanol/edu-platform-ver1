@@ -94,8 +94,11 @@ public class MediaService {
     return storagePath.substring(prefix.length());
   }
   private String r2Endpoint() {
-    if (!r2Endpoint.isBlank()) return r2Endpoint;
-    return "https://" + r2AccountId + ".r2.cloudflarestorage.com";
+    var endpoint = r2Endpoint.trim();
+    if (!endpoint.isBlank()) return endpoint.startsWith("http://") || endpoint.startsWith("https://") ? endpoint : "https://" + endpoint;
+    var account = r2AccountId.trim();
+    if (account.startsWith("http://") || account.startsWith("https://")) return account;
+    return "https://" + account + ".r2.cloudflarestorage.com";
   }
   private S3Client r2Client() {
     if (r2AccountId.isBlank() || r2BucketName.isBlank() || r2AccessKey.isBlank() || r2SecretKey.isBlank()) {
